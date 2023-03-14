@@ -1,6 +1,13 @@
+
+# Serve Multi-GPU LlaMa  on Flask!
+
+This is a hacky script that simultaneously runs LLaMa and a web server so that you can launch a local LLaMa API. 
+
+To get it running, just edit the top of the `launch.sh` script to input your `CUDA_VISIBLE_DEVICES`, `TARGET_FOLDER`, and `MODEL_SIZE`. Then, run `./launch.sh` and you should be good to go!
+
 # Original repository [and Readme] at https://github.com/facebookresearch/llama
 
-# Changes
+# Changes From Previous Fork
 - New *example.py* allows to use console for interactive prompting. Supports multiple gpu (tested with 13b model on two RTX3090)
 Supports multiple gpu's (tested with 13b model on two RTX3090).
 - Modified **llama/generate.py** to support the above functionality
