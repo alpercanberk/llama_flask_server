@@ -108,7 +108,22 @@ def make_buffers(max_len: int, pad_token: int, gpu: int):
 
 def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: int, parallel: bool):
     if gpu == 0:
-        input_prompt = input("Person: ")
+        # input_prompt = input("Person: ")
+        while True:
+            # print("waiting...")
+            try:
+                with open("prompt", "r") as f_prompt:
+                    # wait for "prompt" file to be created, then read and destroy "prompt" file
+                    input_prompt = f_prompt.read()
+                    f_prompt.close()
+                    os.remove("prompt")
+                    break
+            except FileNotFoundError:
+                time.sleep(0.01)
+                continue
+
+        print("[LLaMa] Input prompt: ", input_prompt)  # debug
+                
         if len(input_prompt) == 0:
             prompt[0, 0] = fin
         else:
@@ -178,8 +193,12 @@ def main(
             break
         else:
             if local_rank == 0:
-                for result in result:
-                    print(f"Llama: {result}")
+                res = result[0]
+                print("[LLaMa] Output: ", res)  # debug
+                #create a file named result
+                with open("result", "w") as f_result:
+                    f_result.write(res)
+                    f_result.close()
         dist.barrier()
     return
 
