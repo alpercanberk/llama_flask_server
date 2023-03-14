@@ -2,18 +2,17 @@ export TARGET_FOLDER="/local/crv/acanberk/llama/weights/"
 export MODEL_SIZE="13B"
 export CUDA_VISIBLE_DEVICES=5,6,7 
 
-
 #sets NPROC to appropriate model size
-if [ $MODEL_SIZE == "7B" ]; then
+if [ $MODEL_SIZE = "7B" ]; then
     export LLAMA_NPROC=1
-elif [ $MODEL_SIZE == "13B" ]; then
+elif [ $MODEL_SIZE = "13B" ]; then
     export LLAMA_NPROC=2
-elif [ $MODEL_SIZE == "33B" ]; then
+elif [ $MODEL_SIZE = "33B" ]; then
     export LLAMA_NPROC=4
-elif [ $MODEL_SIZE == "65B" ]; then
+elif [ $MODEL_SIZE = "65B" ]; then
     export LLAMA_NPROC=8
 else
-    echo "Model size is not valid. Please use 7B, 13B, 33B, or 65B"
+    echo "Invalid model size"
     exit 1
 fi
 
@@ -31,5 +30,3 @@ rm /tmp/output.log
 python app.py
 
 pkill -P $$
-
-
