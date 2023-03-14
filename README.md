@@ -7,6 +7,12 @@ So far it supports running the 13B model on 2 GPUs but it can be extended to ser
 
 To get it running, just edit the `launch.sh` script to input your `CUDA_VISIBLE_DEVICES`, `TARGET_FOLDER`, and `MODEL_SIZE`. Then, run `./launch.sh` and you should be good to go!
 
+Once the server is launched, you can test it by opening a separate window and running
+```
+curl -X POST -H "Content-Type: application/json" -d '{"prompt":"hello world"}' http://localhost:54983/flask-inference/
+```
+
+
 Feel free to improve this script and submit a PR, fork your own repo, or whatever you want! 
 
 # Original repository [and Readme] at https://github.com/facebookresearch/llama
