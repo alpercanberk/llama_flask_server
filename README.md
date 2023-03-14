@@ -3,7 +3,11 @@
 
 This is a hacky script that simultaneously runs LLaMa and a web server so that you can launch a local LLaMa API. 
 
+So far it supports running the 13B model on 2 GPUs but it can be extended to serving bigger models as well.
+
 To get it running, just edit the top of the `launch.sh` script to input your `CUDA_VISIBLE_DEVICES`, `TARGET_FOLDER`, and `MODEL_SIZE`. Then, run `./launch.sh` and you should be good to go!
+
+Feel free to improve this script, fork your own repo, or whatever you want!
 
 # Original repository [and Readme] at https://github.com/facebookresearch/llama
 
