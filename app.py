@@ -4,6 +4,7 @@ import flask
 import string
 import random
 import os
+import time
 
 app = flask.Flask(__name__)
 
@@ -16,11 +17,16 @@ def hello():
 @app.route("/flask-inference/", methods = ["POST"])
 def flask_inference_no_batching():
 
+	if os.path.exists("prompt"):
+		os.remove("prompt")
+	if os.path.exists("result"):
+		os.remove("result")
+
 	print("received POST request", flush=True)
 
 	req_data = flask.request.json
 	prompt = req_data["prompt"]
-	print("request data", req_data, flush=True) # for testing
+	print("request data with prompt", prompt[:30], flush=True) # for testing
     
 	# write to file named "prompt"
 	tempname = "".join(random.choices(string.ascii_uppercase, k=20))
@@ -43,7 +49,9 @@ def flask_inference_no_batching():
 				os.remove("result")
 				result_found = True
 		except IOError:
-			pass
+			time.sleep(0.1)
+	
+	print("[Server] sending result: ", result, "...", flush=True)
 
 	res_data = {
 		"result": result
@@ -57,5 +65,9 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--port", type=int, default=54983)
 	args = parser.parse_args()
+
+	#remove any files named prompt
+	if os.path.exists("prompt"):
+		os.remove("prompt")
 
 	app.run(port=args.port, debug=True, host='127.0.0.1')

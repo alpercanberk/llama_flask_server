@@ -139,7 +139,7 @@ def write_or_close(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, t: float
     if prompt[0, 0] == fin:
         return None
     else:
-        result = gen.generate(prompt, max_gen_len=64, temperature=t, top_p=p)
+        result = gen.generate(prompt, max_gen_len=2048, temperature=t, top_p=p, stop_str="[PLAN END]")
         prompt = prompt.fill_(gen.tokenizer.pad_id)
         return result
 
@@ -160,9 +160,13 @@ def mlink(prompt: torch.Tensor):
     size = dist.get_world_size()
     send_buff = prompt.clone()
     recv_buff = prompt.clone()
+
     if rank == 0:
-        send_req = dist.isend(send_buff, 1)
-        send_req.wait()
+        send_reqs = []
+        for i in range(1, size):
+            send_reqs.append(dist.isend(send_buff, i))
+        for req in send_reqs:
+            req.wait()
     else:
         dist.recv(recv_buff, 0)
     prompt[:] = recv_buff[:]
@@ -173,7 +177,7 @@ def main(
     tokenizer_path: str,
     temperature: float = 0.8,
     top_p: float = 0.95,
-    max_seq_len: int = 256,
+    max_seq_len: int = 2048,
     max_batch_size: int = 1,
 ):
     local_rank, world_size = setup_model_parallel()
@@ -194,14 +198,18 @@ def main(
         else:
             if local_rank == 0:
                 res = result[0]
-                print("[LLaMa] Output: ", res)  # debug
+                print("[LLaMa] Output: ", res[:20])  # debug
                 #create a file named result
+                assert not os.path.exists("result"), "[LLaMa] result file already exists"
                 with open("result", "w") as f_result:
                     f_result.write(res)
                     f_result.close()
+                print("[LLaMa] result file created with content: ", res[:20])
         dist.barrier()
     return
 
 
 if __name__ == "__main__":
+    if os.path.exists("result"):
+        os.remove("result")
     fire.Fire(main)

@@ -22,13 +22,17 @@ class LLaMA:
         self,
         prompt: torch.Tensor,
         max_gen_len: int,
+        stop_str :str = None,
         temperature: float = 0.8,
         top_p: float = 0.95,
     ) -> List[str]:
+        
         prompt_len = prompt.size(1) - (prompt == self.tokenizer.pad_id).view(-1).sum().item()
         input_text_mask = prompt != self.tokenizer.pad_id
         start_pos = prompt_len
         prev_pos = 0
+        len_stop_str = len(self.tokenize(stop_str))+1
+
         for cur_pos in range(start_pos, max_gen_len):
             logits = self.model.forward(prompt[:, prev_pos:cur_pos], prev_pos)
             if temperature > 0:
@@ -43,6 +47,13 @@ class LLaMA:
             )
             prompt[:, cur_pos] = next_token
             prev_pos = cur_pos
+
+            if stop_str is not None:
+                assert len(prompt) == 1 #can't handle batch
+                potential_stop_str = prompt[0, max(start_pos, cur_pos-len_stop_str):cur_pos]
+                if stop_str in self.tokenizer.decode(potential_stop_str.tolist()):
+                    break
+        
         # Decoding
         decoded = []
         t = prompt[0, :start_pos + max_gen_len].tolist()
