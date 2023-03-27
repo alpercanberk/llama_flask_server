@@ -5,6 +5,7 @@ import string
 import random
 import os
 import time
+import json
 
 app = flask.Flask(__name__)
 
@@ -24,18 +25,14 @@ def flask_inference_no_batching():
 
 	print("received POST request", flush=True)
 
-	req_data = flask.request.json
-	prompt = req_data["prompt"]
-	print("request data with prompt", prompt[:30], flush=True) # for testing
-    
+	req_data = flask.request.json    
 	# write to file named "prompt"
 	tempname = "".join(random.choices(string.ascii_uppercase, k=20))
 	try:
 		with open(tempname, "w") as f_prompt_temp:
-			f_prompt_temp.write(prompt)
+			f_prompt_temp.write(json.dumps(req_data))
 			f_prompt_temp.close()
 			os.rename(tempname, "prompt")
-
 	except IOError:
 		print("prompt could not be written!!!")
 
@@ -45,6 +42,7 @@ def flask_inference_no_batching():
 		try:
 			with open("result", "r") as f_result:
 				result = f_result.read()
+				result = json.loads(result)				
 				f_result.close()
 				os.remove("result")
 				result_found = True
@@ -53,11 +51,7 @@ def flask_inference_no_batching():
 	
 	print("[Server] sending result: ", result, "...", flush=True)
 
-	res_data = {
-		"result": result
-	}
-
-	return flask.jsonify(res_data)
+	return flask.jsonify(result)
 
 if __name__ == "__main__":
 	import argparse 

@@ -105,6 +105,26 @@ def make_buffers(max_len: int, pad_token: int, gpu: int):
     prompt = torch.full((1, max_len), pad_token).cuda().long()
     return fin, prompt
 
+def create_settings_file(server_input, filename="settings.json"):
+
+    #write the 4 if statements above more concisely
+    prob_mode = server_input.get("prob_mode", False)
+    temperature = server_input.get("temperature", 0.8)
+    top_p = server_input.get("top_p", 0.95)
+    stop_str = server_input.get("stop_str", "[PLAN END]")
+
+    #create settings file
+    settings = {
+        "prob_mode": prob_mode,
+        "temperature": temperature,
+        "top_p": top_p,
+        "stop_str": stop_str
+    }
+    
+    with open(filename, "w") as f:
+        json.dump(settings, f)
+
+    
 
 def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: int, parallel: bool):
     if gpu == 0:
@@ -114,15 +134,29 @@ def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: i
             try:
                 with open("prompt", "r") as f_prompt:
                     # wait for "prompt" file to be created, then read and destroy "prompt" file
-                    input_prompt = f_prompt.read()
+                    server_input = json.load(f_prompt)
+
+                    assert "prompt" in server_input, "prompt not found in server input"
+                    input_prompt = server_input["prompt"]
+
+                    #create settings file
+                    prob_mode = server_input.get("prob_mode", False)
+                    temperature = server_input.get("temperature", 0.8)
+                    top_p = server_input.get("top_p", 0.95)
+                    stop_str = server_input.get("stop_str", "[PLAN END]")
+
+                    #create settings file
+                    create_settings_file(server_input, filename="settings.json")
+
                     f_prompt.close()
+
                     os.remove("prompt")
                     break
             except FileNotFoundError:
                 time.sleep(0.01)
                 continue
 
-        print("[LLaMa] Input prompt: ", input_prompt)  # debug
+        print("[LLaMa] Input prompt: ", input_prompt[:10])  # debug
                 
         if len(input_prompt) == 0:
             prompt[0, 0] = fin
@@ -135,13 +169,13 @@ def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: i
     return 0
 
 
-def write_or_close(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, t: float, p: float):
+def write_or_close(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, t: float, p: float, stop_str: str, prob_mode: bool):
     if prompt[0, 0] == fin:
         return None
     else:
-        result = gen.generate(prompt, max_gen_len=2048, temperature=t, top_p=p, stop_str="[PLAN END]")
+        result, info = gen.generate(prompt, max_gen_len=2048, temperature=t, top_p=p, stop_str=stop_str, prob_mode=prob_mode)
         prompt = prompt.fill_(gen.tokenizer.pad_id)
-        return result
+        return result, info
 
 
 @contextmanager
@@ -191,18 +225,22 @@ def main(
     dist.barrier()
     while True:
         tokenize_or_wait(prompt=prompt, fin=fin, gen=generator, gpu=local_rank, parallel=world_size > 1)
-        result = write_or_close(prompt=prompt, fin=fin, gen=generator, p=top_p, t=temperature)
+        settings = json.load(open("settings.json", "r"))
+        result, info = write_or_close(prompt=prompt, fin=fin, gen=generator, \
+                                      p=settings["top_p"], t=settings["temperature"], \
+                                      stop_str=settings["stop_str"], prob_mode=settings["prob_mode"])
         dist.barrier()
         if result is None:
             break
         else:
             if local_rank == 0:
                 res = result[0]
+                result_json = json.dumps({"result": res, "info": info})
                 print("[LLaMa] Output: ", res[:20])  # debug
                 #create a file named result
                 assert not os.path.exists("result"), "[LLaMa] result file already exists"
                 with open("result", "w") as f_result:
-                    f_result.write(res)
+                    f_result.write(result_json)
                     f_result.close()
                 print("[LLaMa] result file created with content: ", res[:20])
         dist.barrier()
