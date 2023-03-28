@@ -1,6 +1,6 @@
 export TARGET_FOLDER="/local/crv/acanberk/llama/weights/"
 export MODEL_SIZE="13B"
-export CUDA_VISIBLE_DEVICES="1,2,3"
+export CUDA_VISIBLE_DEVICES="6,7"
 
 #sets NPROC to appropriate model size
 if [ $MODEL_SIZE = "7B" ]; then

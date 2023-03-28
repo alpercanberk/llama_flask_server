@@ -34,7 +34,6 @@ class LLaMA:
         prev_pos = 0
         len_stop_str = len(self.tokenize(stop_str))+1
         sequence_log_prob = 0
-        sequence_log_perplexity = 0
 
         for cur_pos in range(start_pos, max_gen_len):
             
