@@ -49,7 +49,7 @@ def flask_inference_no_batching():
 		except IOError:
 			time.sleep(0.1)
 	
-	print("[Server] sending result: ", result, "...", flush=True)
+	print("[Server] sending result")
 
 	return flask.jsonify(result)
 

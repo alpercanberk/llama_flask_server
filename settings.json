@@ -1,1 +1,1 @@
-{"prob_mode": true, "temperature": 0.8, "top_p": 0.95, "stop_str": "[PLAN END]"}
+{"prob_mode": true, "temperature": 0.0, "top_p": 0.95, "stop_str": "[PLAN END]", "prob_prev_pos": 0, "prob_top_k": 15}

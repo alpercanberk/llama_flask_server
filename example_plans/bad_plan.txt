@@ -61,3 +61,4 @@ My plan is as follows:
 pick up the yellow block
 pick up the red block
 stack the yellow block on top of the red block
+[PLAN END]

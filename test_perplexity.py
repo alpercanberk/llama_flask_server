@@ -27,20 +27,23 @@ prompts = [
 
 ]
 
+def calculate_log_perplexity(log_probs):
+    return (1/len(log_probs)) * sum(log_probs)
+
 # Make a request to the server for each prompt
 results = []
 for prompt in prompts:
     data = {"prompt": prompt, "prob_mode":True}
     headers = {"Content-Type": "application/json"}
 
-    response = requests.post("http://localhost:54983/flask-inference/", json=data, headers=headers)
+    response = requests.post("http://127.0.0.1:54983/flask-inference/", json=data, headers=headers)
 
     # Check if the request was successful
     if response.status_code == 200:
         # Convert the response to a dictionary
         response_dict = json.loads(response.text)
         # Append the result to the list of results
-        results.append((prompt[:100], response_dict['info']['log_perplexity']))
+        results.append((prompt[:100], calculate_log_perplexity(response_dict['info']['chosen_log_probs'])))
     else:
         results.append((prompt[:100], "Request failed"))
 
@@ -51,6 +54,22 @@ plan_directory = 'example_plans'
 # Get a list of all the plan files in the directory
 plan_files = os.listdir(plan_directory)
 
+
+def extract_plan_start_index(sequence_log_probs, sequence_tokens, plan_start_str='[PLAN]'):
+    #while plan appears in the string, add the last index of the list to the string
+    #return the list of indices
+
+    for i in range(len(sequence_tokens), 0, -1):
+        if plan_start_str in "".join(sequence_tokens[i:]):
+            break
+        
+    plan_tokens = sequence_tokens[i:]
+    plan_sequence_log_probs = sequence_log_probs[i:]
+    
+    return sum(plan_sequence_log_probs) / len(plan_sequence_log_probs)
+
+
+
 # Iterate over each plan file and pass it through the model
 for plan_file in plan_files:
     # Open the plan file and read its contents
@@ -60,14 +79,16 @@ for plan_file in plan_files:
     # Make a request to the server with the plan as the prompt
     data = {"prompt": plan, "prob_mode":True}
     headers = {"Content-Type": "application/json"}
-    response = requests.post("http://localhost:54983/flask-inference/", json=data, headers=headers)
+    response = requests.post("http://127.0.0.1:54983/flask-inference/", json=data, headers=headers)
 
     # Check if the request was successful
     if response.status_code == 200:
         # Convert the response to a dictionary
         response_dict = json.loads(response.text)
         # Append the result to the list of results
-        results.append((plan_file, response_dict['info']['log_perplexity']))
+        results.append((plan_file, extract_plan_start_index(response_dict['info']['chosen_log_probs'], response_dict['info']['chosen_decode_tokens'])))
+        # plan_start_idx = extract_plan_start_index(response_dict['info']['log_perplexity'], response_dict['info']['tokens'])
+        # print(response_dict['info']['tokens'][plan_start_idx:])
     else:
         results.append((plan_file, "Request failed"))
 
