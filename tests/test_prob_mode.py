@@ -9,9 +9,6 @@ prompt_text = open("example_plans/good_plan.txt", "r").read()
 print("sending request")
 print("length of prompt:", len(prompt_text))
 
-
-
-
 n_calls = 2
 started = False
 for i in range(n_calls):
@@ -29,6 +26,7 @@ for i in range(n_calls):
     print(response['info']['log_perplexity'][-5:])
     print(f"Tokens (length: {len(response['info']['tokens'])}):")
     # print(response['info']['tokens'])
+    break
 
 print(f"Time taken per call: {(time.time() - start_time)/n_calls}")
 
