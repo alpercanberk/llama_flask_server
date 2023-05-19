@@ -235,6 +235,7 @@ class Transformer(nn.Module):
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
         # print("Forward with", seqlen, "tokens", start_pos, "start pos")
+        print(f"Forward with tokens={tokens}")
 
         mask = None
         if seqlen > 1:
@@ -253,6 +254,8 @@ class Transformer(nn.Module):
     @torch.inference_mode()
     def forward_with_probs(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
+
+        print("batch size", _bsz, "seqlen", seqlen)
 
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)

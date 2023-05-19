@@ -19,6 +19,7 @@ from fairscale.nn.model_parallel.initialize import initialize_model_parallel
 
 from llama import ModelArgs, Transformer, Tokenizer, LLaMA
 
+SEQ_LEN = 2048
 
 def setup_model_parallel() -> Tuple[int, int]:
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -171,7 +172,7 @@ def write_or_close(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, t: float
     if prompt[0, 0] == fin:
         return None
     else:
-        result, info = gen.generate(prompt, max_gen_len=2048, temperature=t, top_p=p, stop_str=stop_str, prob_mode=prob_mode, prob_prev_pos=prob_prev_pos, prob_top_k=prob_top_k)
+        result, info = gen.generate(prompt, max_gen_len=SEQ_LEN, temperature=t, top_p=p, stop_str=stop_str, prob_mode=prob_mode, prob_prev_pos=prob_prev_pos, prob_top_k=prob_top_k)
         prompt = prompt.fill_(gen.tokenizer.pad_id)
         return result, info
 
@@ -209,7 +210,7 @@ def main(
     tokenizer_path: str,
     temperature: float = 0.8,
     top_p: float = 0.95,
-    max_seq_len: int = 2048,
+    max_seq_len: int = SEQ_LEN,
     max_batch_size: int = 1,
 ):
     local_rank, world_size = setup_model_parallel()

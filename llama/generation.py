@@ -99,10 +99,15 @@ class LLaMA:
             #generation mode
             if prob_prev_pos != 0:
                 prev_pos = prob_prev_pos
+                start_pos = prob_prev_pos + 1
 
             for cur_pos in range(start_pos, max_gen_len):
-    
+                
+                print("[Generation] cur pos", cur_pos, "prev pos", prev_pos, "start pos", start_pos)
+
                 logits = self.model.forward(prompt[:, prev_pos:cur_pos], prev_pos)
+
+                print("After forward")
 
                 if temperature > 0:
                     probs = torch.softmax(logits / temperature, dim=-1)
@@ -110,6 +115,10 @@ class LLaMA:
                 else:
                     next_token = torch.argmax(logits, dim=-1)
                 next_token = next_token.reshape(-1)
+
+                print("[Generation] cur pos", cur_pos, "next token", next_token)
+
+
                 # only replace token if prompt has already been generated
                 next_token = torch.where(
                     input_text_mask[:, cur_pos], prompt[:, cur_pos], next_token
@@ -125,6 +134,7 @@ class LLaMA:
                     potential_stop_str = prompt[0, max(start_pos, cur_pos-len_stop_str):cur_pos]
                     # potential_stop_str = prompt[0, max(0, cur_pos-len_stop_str):cur_pos]
                     if stop_str in self.tokenizer.decode(potential_stop_str.tolist()):
+                        chosen_decode_tokens = [self.tokenizer.decode(token) for token in prompt[0, 0:cur_pos].tolist()]
                         break
 
         end_time = time.time()
