@@ -234,9 +234,6 @@ class Transformer(nn.Module):
         self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
-        # print("Forward with", seqlen, "tokens", start_pos, "start pos")
-        print(f"Forward with tokens={tokens}")
-
         mask = None
         if seqlen > 1:
             mask = torch.full((1, 1, seqlen, seqlen + start_pos), float("-inf"), device=tokens.device)
@@ -255,13 +252,9 @@ class Transformer(nn.Module):
     def forward_with_probs(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
 
-        print("batch size", _bsz, "seqlen", seqlen)
-
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
-
-        print(f"tokens={tokens}")
 
         mask = None
         if seqlen > 1:
@@ -273,7 +266,11 @@ class Transformer(nn.Module):
         h = self.norm(h)
 
         print(f"last hidden shape={h.shape}")
+        assert h.shape[0] == 1
+        last_hidden = h[0, -1, :].detach().cpu().numpy()
 
         output = self.output(h) 
 
-        return output.float()
+        return output.float(), {
+            "last_hidden": last_hidden,
+        }

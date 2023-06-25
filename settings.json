@@ -1,1 +1,1 @@
-{"prob_mode": false, "temperature": 0.0, "top_p": 0.95, "stop_str": "[PLAN END]", "prob_prev_pos": 0, "prob_top_k": 15}
+{"generate": true, "temperature": 0.0, "top_p": 0.95, "prev_pos": 0, "stop_str": ["asdf", "It"], "stats_top_k": 15, "max_gen_len": 64, "return_stats": false, "return_detailed_stats": true}

@@ -6,9 +6,15 @@ import random
 import os
 import time
 import json
+import pathlib
+import yaml
 
 app = flask.Flask(__name__)
 
+yaml_file_path = pathlib.Path(__file__).parent.absolute() / "default_request_settings.yaml"
+with open(yaml_file_path, "r") as f:
+	default_request_settings = yaml.load(f, Loader=yaml.FullLoader)
+app.config["default_request_settings"] = default_request_settings
 
 @app.route("/")
 def hello():
@@ -23,14 +29,30 @@ def flask_inference_no_batching():
 	if os.path.exists("result"):
 		os.remove("result")
 
-	print("received POST request", flush=True)
+	print("[Server] Received POST request", flush=True)
 
-	req_data = flask.request.json    
+	req_data = flask.request.json
+	default_settings = app.config["default_request_settings"]
+
+	for key, value in req_data.items():
+		if key not in default_settings:
+			return flask.jsonify({"error": f"Key '{key}' is not recognized"}), 400
+		if not isinstance(value, type(default_settings[key])):
+			return flask.jsonify({"error": f"Expected type {type(default_settings[key])} for key '{key}', but got {type(value)}"}), 400
+		
+	#fill default settings with values from req_data
+	req_filled_in = {}
+	for key, value in default_settings.items():
+		if key in req_data:
+			req_filled_in[key] = req_data[key]
+		else:
+			req_filled_in[key] = value
+
 	# write to file named "prompt"
 	tempname = "".join(random.choices(string.ascii_uppercase, k=20))
 	try:
 		with open(tempname, "w") as f_prompt_temp:
-			f_prompt_temp.write(json.dumps(req_data))
+			f_prompt_temp.write(json.dumps(req_filled_in))
 			f_prompt_temp.close()
 			os.rename(tempname, "prompt")
 	except IOError:
@@ -49,7 +71,7 @@ def flask_inference_no_batching():
 		except IOError:
 			time.sleep(0.1)
 	
-	print("[Server] sending result")
+	print("[Server] sending back result")
 
 	return flask.jsonify(result)
 

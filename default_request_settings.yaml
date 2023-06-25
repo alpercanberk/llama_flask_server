@@ -1,0 +1,10 @@
+prompt: ""
+generate: true
+temperature: 0.0
+top_p: 0.95
+prev_pos: 0
+stop_str: []
+stats_top_k: 15
+max_gen_len: 4096
+return_stats: false
+return_detailed_stats: false

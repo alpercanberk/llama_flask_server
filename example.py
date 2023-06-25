@@ -9,17 +9,13 @@ import fire
 import time
 import json
 
-import torch.distributed as dist
-
 from contextlib import contextmanager
-
 from pathlib import Path
-
 from fairscale.nn.model_parallel.initialize import initialize_model_parallel
-
+import torch.distributed as dist
 from llama import ModelArgs, Transformer, Tokenizer, LLaMA
 
-SEQ_LEN = 2048
+SEQ_LEN = 1024 * 4
 
 def setup_model_parallel() -> Tuple[int, int]:
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
@@ -34,27 +30,6 @@ def setup_model_parallel() -> Tuple[int, int]:
     return local_rank, world_size
 
 
-def force_parallel(checkpoint: dict, n_gpus: int = 2):
-    assert n_gpus == 2, "More parallelizm to be done."
-    ckpt1 = dict()
-    ckpt2 = dict()
-    for k, v in checkpoint.items():
-        size = v.size()
-        # ColumnParallel
-        if k.split(".")[-2] in ["wq", "wk", "wv", "w1", "w3", "output"]:
-            ckpt1[k] = v[:size[0] // 2, :]
-            ckpt2[k] = v[size[0] // 2:, :]
-        # RowParallel
-        elif k.split(".")[-2] in ["wo", "w2", "tok_embeddings"]:
-            ckpt1[k] = v[:, :size[1] // 2]
-            ckpt2[k] = v[:, size[1] // 2:]
-        # NonParallel?
-        else:
-            ckpt1[k] = v
-            ckpt2[k] = v
-    return ckpt1, ckpt2
-
-
 def load(
     ckpt_dir: str,
     tokenizer_path: str,
@@ -65,24 +40,17 @@ def load(
 ) -> LLaMA:
     start_time = time.time()
     checkpoints = sorted(Path(ckpt_dir).glob("*.pth"))
-    # assert world_size == len(
-    #     checkpoints
-    # ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {world_size}"
+
+    assert world_size == len(
+        checkpoints
+    ), f"Loading a checkpoint for MP={len(checkpoints)} but world size is {world_size}"
+
     if world_size == len(checkpoints):  # default mode
         ckpt_path = checkpoints[local_rank]
         checkpoint = torch.load(ckpt_path, map_location="cpu")
-    elif world_size == 2 and len(checkpoints) == 1:  # 7B to two GPUs
-        if local_rank == 0:
-            ckpt_path = checkpoints[local_rank]
-            checkpoint = torch.load(ckpt_path, map_location="cpu")
-            checkpoint, _ = force_parallel(checkpoint)
-        if local_rank == 1:
-            ckpt_path = checkpoints[0]
-            checkpoint = torch.load(ckpt_path, map_location="cpu")
-            _, checkpoint = force_parallel(checkpoint)
-        dist.barrier()
     else:
-        raise NotImplementedError("Further parallelization to be done.")
+        raise NotImplementedError("Further parallelization to be done")
+    
     with open(Path(ckpt_dir) / "params.json", "r") as f:
         params = json.loads(f.read())
 
@@ -106,36 +74,10 @@ def make_buffers(max_len: int, pad_token: int, gpu: int):
     prompt = torch.full((1, max_len), pad_token).cuda().long()
     return fin, prompt
 
-def create_settings_file(server_input, filename="settings.json"):
-
-    #write the 4 if statements above more concisely
-    prob_mode = server_input.get("prob_mode", False)
-    temperature = server_input.get("temperature", 0.0)
-    top_p = server_input.get("top_p", 0.95)
-    prob_prev_pos = server_input.get("prob_prev_pos", 0)
-    stop_str = server_input.get("stop_str", "[PLAN END]")
-    prob_top_k = server_input.get("prob_top_k", 15)
-
-    #create settings file
-    settings = {
-        "prob_mode": prob_mode,
-        "temperature": temperature,
-        "top_p": top_p,
-        "stop_str": stop_str,
-        "prob_prev_pos": prob_prev_pos,
-        "prob_top_k": prob_top_k
-    }
-    
-    with open(filename, "w") as f:
-        json.dump(settings, f)
-
-    
 
 def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: int, parallel: bool):
     if gpu == 0:
-        # input_prompt = input("Person: ")
         while True:
-            # print("waiting...")
             try:
                 with open("prompt", "r") as f_prompt:
                     # wait for "`prompt" file to be created, then read and destroy "prompt" file
@@ -144,35 +86,43 @@ def tokenize_or_wait(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, gpu: i
                     assert "prompt" in server_input, "prompt not found in server input"
                     input_prompt = server_input["prompt"]
 
-                    #create settings file
-                    create_settings_file(server_input, filename="settings.json")
+                    #create settings file, don't include prompt in it
+                    with open('settings.json', "w") as f:
+                        json.dump({k: v for k, v in server_input.items() if k != "prompt"}, f)
 
                     f_prompt.close()
-
                     os.remove("prompt")
                     break
             except FileNotFoundError:
                 time.sleep(0.01)
                 continue
 
-        print("[LLaMa] Input prompt: ", input_prompt[:10])  # debug
+        #write down prompt, shorten and print only the beginning and the end if its too long
+        print("[LLaMa] Input prompt: ", input_prompt[:10], "" if len(input_prompt) < 10 else "...", 
+                                                input_prompt[-10:] if len(input_prompt) > 10 else "")
                 
         if len(input_prompt) == 0:
             prompt[0, 0] = fin
         else:
             tokens = gen.tokenize(input_prompt).cuda()
             prompt[0, :len(tokens)] = tokens
+
     if parallel:
         with tmp_process_group():
             mlink(prompt)
+            
     return 0
 
 
-def write_or_close(prompt: torch.Tensor, fin: torch.Tensor, gen: LLaMA, t: float, p: float, stop_str: str, prob_mode: bool, prob_prev_pos: int, prob_top_k: int = 0):
+def write_or_close(prompt: torch.Tensor, 
+                   fin: torch.Tensor, 
+                   gen: LLaMA, 
+                   **settings):
     if prompt[0, 0] == fin:
         return None
     else:
-        result, info = gen.generate(prompt, max_gen_len=SEQ_LEN, temperature=t, top_p=p, stop_str=stop_str, prob_mode=prob_mode, prob_prev_pos=prob_prev_pos, prob_top_k=prob_top_k)
+        # unpack settings within the function call
+        result, info = gen.generate(prompt, **settings)
         prompt = prompt.fill_(gen.tokenizer.pad_id)
         return result, info
 
@@ -224,14 +174,10 @@ def main(
     dist.barrier()
     while True:
         tokenize_or_wait(prompt=prompt, fin=fin, gen=generator, gpu=local_rank, parallel=world_size > 1)
+
         settings = json.load(open("settings.json", "r"))
-        result, info = write_or_close(prompt=prompt, fin=fin, gen=generator, \
-                                      p=settings["top_p"], 
-                                      t=settings["temperature"], \
-                                      stop_str=settings["stop_str"], 
-                                      prob_mode=settings["prob_mode"], 
-                                      prob_prev_pos=settings["prob_prev_pos"],
-                                      prob_top_k=settings["prob_top_k"])
+        result, info = write_or_close(prompt=prompt, fin=fin, gen=generator, **settings)
+
         dist.barrier()
         if result is None:
             break
